@@ -1,0 +1,188 @@
+import sys
+import os
+import json
+import traceback
+import time
+import winreg # Работа с реестром для автозагрузки
+import win32gui
+import win32con
+import win32api
+from PyQt6.QtWidgets import (QApplication, QMainWindow, QPushButton, 
+                                 QVBoxLayout, QWidget, QFileDialog, QLabel, QSystemTrayIcon, QMenu)
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
+from PyQt6.QtMultimediaWidgets import QVideoWidget
+from PyQt6.QtCore import QUrl, Qt, QTimer
+
+def log_error(msg):
+    with open("debug.log", "a", encoding="utf-8") as f:
+        f.write(f"{time.strftime('%H:%M:%S')} - {msg}\n")
+
+class LiveWallpaper(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        try:
+            self.setWindowTitle("PyWallpaper v1.2")
+            self.setFixedSize(350, 280) # Немного увеличил высоту для новой кнопки
+            
+            self.app_data = os.path.join(os.getenv('APPDATA'), 'PyWallpaper')
+            os.makedirs(self.app_data, exist_ok=True)
+            self.config_path = os.path.join(self.app_data, 'config.json')
+
+            self.video_container = QVideoWidget()
+            self.video_container.setWindowFlags(Qt.WindowType.FramelessWindowHint)
+            
+            self.media_player = QMediaPlayer()
+            self.audio_output = QAudioOutput()
+            self.audio_output.setVolume(0)
+            self.media_player.setAudioOutput(self.audio_output)
+            self.media_player.setVideoOutput(self.video_container)
+            self.media_player.setLoops(QMediaPlayer.Loops.Infinite)
+
+            self.is_paused_by_system = False
+            self.init_ui()
+            self.init_tray()
+            
+            self.check_timer = QTimer()
+            self.check_timer.timeout.connect(self.check_fullscreen_app)
+            self.check_timer.start(2000)
+
+            QTimer.singleShot(1000, self.load_config)
+            log_error("Инициализация v1.2 завершена")
+        except Exception:
+            log_error("ОШИБКА ИНИЦИАЛИЗАЦИИ:\n" + traceback.format_exc())
+
+    def check_fullscreen_app(self):
+        try:
+            hwnd = win32gui.GetForegroundWindow()
+            if hwnd == 0: return
+            rect = win32gui.GetWindowRect(hwnd)
+            if (rect[2]-rect[0]) >= win32api.GetSystemMetrics(0) and (rect[3]-rect[1]) >= win32api.GetSystemMetrics(1):
+                if win32gui.GetClassName(hwnd) not in ["Progman", "WorkerW"]:
+                    if self.media_player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+                        self.media_player.pause()
+                        self.is_paused_by_system = True
+            else:
+                if self.is_paused_by_system:
+                    self.media_player.play()
+                    self.is_paused_by_system = False
+        except: pass
+
+    def toggle_autostart(self):
+        """Включает или выключает автозапуск в реестре"""
+        key_path = r"Software\Microsoft\Windows\CurrentVersion\Run"
+        app_name = "PyWallpaper"
+        # Получаем путь к текущему запущенному файлу
+        if getattr(sys, 'frozen', False):
+            app_path = sys.executable
+        else:
+            app_path = os.path.abspath(sys.argv[0])
+
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path, 0, winreg.KEY_ALL_ACCESS)
+            try:
+                winreg.QueryValueEx(key, app_name)
+                winreg.DeleteValue(key, app_name)
+                self.btn_auto.setText("Автозапуск: ВЫКЛ")
+                self.btn_auto.setStyleSheet("background-color: #e74c3c; color: white;")
+                log_error("Автозагрузка удалена")
+            except FileNotFoundError:
+                winreg.SetValueEx(key, app_name, 0, winreg.REG_SZ, app_path)
+                self.btn_auto.setText("Автозапуск: ВКЛ")
+                self.btn_auto.setStyleSheet("background-color: #2ecc71; color: white;")
+                log_error("Автозагрузка добавлена")
+            winreg.CloseKey(key)
+        except Exception as e:
+            log_error(f"Ошибка реестра: {e}")
+
+    def init_ui(self):
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        layout = QVBoxLayout(central_widget)
+        
+        self.label = QLabel("PyWallpaper v1.2\nНастройка автозагрузки")
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setStyleSheet("font-size: 14px; font-weight: bold;")
+        
+        btn_select = QPushButton("Выбрать MP4 видео")
+        btn_select.setFixedHeight(40)
+        btn_select.clicked.connect(self.select_file)
+
+        self.btn_auto = QPushButton("Проверка автозапуска...")
+        self.btn_auto.setFixedHeight(40)
+        self.btn_auto.clicked.connect(self.toggle_autostart)
+        
+        # Сразу проверяем, стоит ли программа в автозагрузке
+        self.update_auto_btn_text()
+
+        layout.addWidget(self.label)
+        layout.addSpacing(10)
+        layout.addWidget(btn_select)
+        layout.addWidget(self.btn_auto)
+
+    def update_auto_btn_text(self):
+        try:
+            key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ)
+            winreg.QueryValueEx(key, "PyWallpaper")
+            self.btn_auto.setText("Автозапуск: ВКЛ")
+            self.btn_auto.setStyleSheet("background-color: #2ecc71; color: white;")
+            winreg.CloseKey(key)
+        except:
+            self.btn_auto.setText("Автозапуск: ВЫКЛ")
+            self.btn_auto.setStyleSheet("background-color: #e74c3c; color: white;")
+
+    def init_tray(self):
+        self.tray_icon = QSystemTrayIcon(self)
+        self.tray_icon.setIcon(self.style().standardIcon(self.style().StandardPixmap.SP_ComputerIcon))
+        menu = QMenu()
+        menu.addAction("Настройки").triggered.connect(self.show)
+        menu.addAction("Выход").triggered.connect(self.quit_app)
+        self.tray_icon.setContextMenu(menu)
+        self.tray_icon.show()
+
+    def select_file(self):
+        path, _ = QFileDialog.getOpenFileName(self, "Выбор видео", "", "Video (*.mp4)")
+        if path:
+            self.save_config(path)
+            self.set_wallpaper(path)
+
+    def set_wallpaper(self, path):
+        try:
+            progman = win32gui.FindWindow("Progman", None)
+            win32gui.SendMessageTimeout(progman, 0x052C, 0, 0, win32con.SMTO_NORMAL, 1000)
+            self.workerw = None
+            def enum_handler(hwnd, ctx):
+                if win32gui.FindWindowEx(hwnd, 0, "SHELLDLL_DefView", None):
+                    self.workerw = win32gui.FindWindowEx(0, hwnd, "WorkerW", None)
+            win32gui.EnumWindows(enum_handler, None)
+            if not self.workerw: self.workerw = win32gui.FindWindow("WorkerW", None)
+
+            self.video_container.showFullScreen()
+            win32gui.SetParent(int(self.video_container.winId()), self.workerw)
+            self.media_player.setSource(QUrl.fromLocalFile(path))
+            self.media_player.play()
+        except: pass
+
+    def save_config(self, path):
+        try:
+            with open(self.config_path, 'w', encoding='utf-8') as f:
+                json.dump({'video': path}, f)
+        except: pass
+
+    def load_config(self):
+        if os.path.exists(self.config_path):
+            try:
+                with open(self.config_path, 'r', encoding='utf-8') as f:
+                    path = json.load(f).get('video')
+                    if path and os.path.exists(path): self.set_wallpaper(path)
+            except: pass
+
+    def quit_app(self):
+        self.media_player.stop()
+        QApplication.quit()
+
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    app.setQuitOnLastWindowClosed(False)
+    window = LiveWallpaper()
+    window.show()
+    sys.exit(app.exec())

@@ -1,0 +1,14 @@
+работа приложение не потребует хорошие характеристики тест проводился на процессоре Intel Celeron N4000 и 4гб ОЗУ DDR4 потребность процессора >1% память до 200мб также тест был на Intel Core I7 7700HQ потребность >0.2% нет лишнего мусора исходный код App_Code.txt 
+
+
+
+Я НА ПРАВА НЕ ПРИТЕНДУЮ МОЕТЕ БРАТЬ КОД И ДОДЕЛЕВАТЬ ВСЕ ЧТО ХОТИТЕ МОЕ УПОМЕНАНИЕ НЕ ОБЪЯЗАТЕЛЬНО (мне будет приятно если будет) ГЛАВНОЕ НЕ ИСПОЛЬЗОВАТЬ ДЛЯ РАСПРОСТРОНЕИЯ ВРЕДОНОСНОГО ПО 
+
+
+
+
+The app doesn't require good specifications. The test was conducted on an Intel Celeron N4000 processor and 4GB of DDR4 RAM. CPU demand is >1%, memory up to 200MB. The test was also conducted on an Intel Core I7 7700HQ. Demand is >0.2%. There is no unnecessary junk. The source code is App_Code.txt.
+
+
+
+I DO NOT CLAIM AUTHORITY. FEEL FREE TO TAKE THE CODE AND ADD WHATEVER YOU WANT. MENTIONING ME IS NOT REQUIRED (I'd be pleased if you did). THE MAIN THING IS NOT TO BE USED FOR DISTRIBUTING MALWARE.
